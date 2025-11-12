@@ -1,0 +1,468 @@
+// This is your improved Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AttendedTypeEnum {
+  REGISTERED
+  ATTENDED
+  ADDED_TO_CART
+  FOLLOW_UP
+  BREAKOUT_ROOM
+  CONVERTED
+}
+
+enum CtaTypeEnum {
+  BUY_NOW
+  BOOK_A_CALL
+}
+
+enum WebinarStatusEnum {
+  SCHEDULED
+  WAITING_ROOM
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum CallStatusEnum {
+  PENDING
+  InProgress
+  COMPLETED
+}
+
+enum BreakoutRoomStatus {
+  ACTIVE
+  CLOSED
+}
+
+enum TenantTier {
+  LAUNCH
+  GROWTH
+  ENTERPRISE
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum TenantRole {
+  OWNER
+  ADMIN
+  CONTRIBUTOR
+  VIEWER
+}
+
+enum DatasetStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+  QUEUED
+}
+
+enum OfferingStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum TenantIsolationLevel {
+  SHARED_SCHEMA
+  DEDICATED_SCHEMA
+  DEDICATED_DATABASE
+}
+
+enum TenantResidencyRegion {
+  US
+  EU
+  APAC
+  LATAM
+}
+
+enum ProvisioningStatus {
+  PENDING
+  EXECUTING
+  COMPLETED
+  FAILED
+}
+
+enum ProvisioningTrigger {
+  SUBSCRIPTION_ACTIVATED
+  MANUAL_OVERRIDE
+  SYSTEM_RECOVERY
+}
+
+enum ConnectorType {
+  AZURE
+  GOOGLE
+  CRM
+  PRODUCT_CATALOG
+  CUSTOM
+}
+
+enum ConnectorStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+  SYNCING
+}
+
+enum SyncStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+model User {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String     @db.VarChar(100)
+  clerkId          String     @unique
+  email            String     @unique
+  profileImage     String
+  webinars         Webinar[]  @relation("PresenterWebinars")
+  stripeConnectId  String?    @db.VarChar(255)
+  lastLoginAt      DateTime?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  deletedAt        DateTime?
+  subscription     Boolean    @default(false)
+  stripeCustomerId String?    @db.VarChar(255)
+  aiAgents         AiAgents[]
+  tenantMemberships TenantMembership[]
+  createdDatasets   Dataset[]            @relation("DatasetCreatedBy")
+  createdOfferings  MarketplaceOffering[] @relation("OfferingCreatedBy")
+  createdConnectors Connector[]          @relation("ConnectorCreatedBy")
+
+  @@index([email])
+  @@index([clerkId])
+}
+
+model Webinar {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title           String            @db.VarChar(255)
+  description     String?           @db.Text
+  startTime       DateTime
+  endTime         DateTime?
+  duration        Int               @default(0) // Duration in minutes
+  webinarStatus   WebinarStatusEnum @default(SCHEDULED)
+  presenterId     String            @db.Uuid
+  presenter       User              @relation("PresenterWebinars", fields: [presenterId], references: [id], onDelete: Cascade)
+  attendances     Attendance[]
+  tags            String[]
+  ctaLabel        String?           @db.VarChar(50)
+  ctaType         CtaTypeEnum
+  ctaUrl          String?           @db.VarChar(255)
+  couponCode      String?           @db.VarChar(50)
+  couponEnabled   Boolean           @default(false)
+  couponExpiry    DateTime?
+  lockChat        Boolean           @default(false)
+  stripeProductId String?           @db.VarChar(255)
+  aiAgentId       String?           @db.Uuid
+  priceId         String?           @db.VarChar(255)
+  recordingUrl    String?
+  thumbnail       String?
+  sellingScript   String?           @db.Text // LLM-generated selling script for AI agent
+  scriptVersion   Int               @default(1) // Version number for script edits
+  datasetId       String?           // Dataset used to generate the script
+  dataset         Dataset?         @relation(fields: [datasetId], references: [id], onDelete: SetNull)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+  Attendee        Attendee?         @relation(fields: [attendeeId], references: [id])
+  attendeeId      String?           @db.Uuid
+  tenantId        String?
+  tenant          Tenant?           @relation(fields: [tenantId], references: [id])
+  breakoutRooms   BreakoutRoom[]
+
+  @@index([presenterId])
+  @@index([aiAgentId])
+  @@index([startTime])
+  @@index([tenantId])
+}
+
+model Attendee {
+  id         String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String         @unique
+  name       String         @db.VarChar(100)
+  callStatus CallStatusEnum @default(PENDING)
+  Attendance Attendance[]
+  Webinar    Webinar[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Attendance {
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webinarId    String           @db.Uuid
+  joinedAt     DateTime         @default(now())
+  leftAt       DateTime?
+  user         Attendee         @relation(fields: [attendeeId], references: [id])
+  webinar      Webinar          @relation(fields: [webinarId], references: [id], onDelete: Cascade)
+  attendedType AttendedTypeEnum
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  attendeeId   String           @db.Uuid
+  userId       String?          @db.Uuid
+
+  @@unique([attendeeId, webinarId]) // ✅ This enforces 1 attendee per webinar
+  @@index([webinarId])
+  @@index([attendedType])
+}
+
+model AiAgents {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String  @db.VarChar(100)
+  firstMessage String  @db.Text
+  prompt     String  @db.Text
+  model      String  @db.VarChar(50)
+  provider   String  @db.VarChar(50)
+  userId    String   @db.Uuid
+  tenantId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Tenant {
+  id        String           @id @default(cuid())
+  slug      String           @unique
+  name      String
+  tier      TenantTier       @default(LAUNCH)
+  status    TenantStatus     @default(ACTIVE)
+  region    String?          @db.VarChar(50)
+  isolationLevel     TenantIsolationLevel @default(SHARED_SCHEMA)
+  residencyRegion    TenantResidencyRegion @default(US)
+  encryptionKeyVersion Int                @default(1)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  members   TenantMembership[]
+  datasets  Dataset[]
+  offerings MarketplaceOffering[]
+  auditLogs TenantAuditLog[]
+  aiAgents  AiAgents[]
+  webinars  Webinar[]
+  provisioningJobs TenantProvisioningJob[]
+  runtimeConfig     TenantRuntimeConfig?
+  provisioningEvents TenantProvisioningEvent[]
+  connectors Connector[]
+
+  @@index([status])
+  @@index([tier])
+  @@index([residencyRegion])
+  @@index([isolationLevel])
+}
+
+model TenantMembership {
+  id        String     @id @default(cuid())
+  tenantId  String
+  userId    String     @db.Uuid
+  role      TenantRole @default(CONTRIBUTOR)
+  createdAt DateTime   @default(now())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+  @@index([userId])
+}
+
+model Dataset {
+  id            String         @id @default(cuid())
+  tenantId      String
+  createdById   String?        @db.Uuid
+  name          String
+  description   String?        @db.Text
+  storagePath   String?        @db.VarChar(255)
+  status        DatasetStatus  @default(PENDING)
+  documentsCount Int           @default(0)
+  metadata      Json?
+  lastSyncedAt  DateTime?
+  connectorId   String?        // Link to connector if data came from connector
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("DatasetCreatedBy", fields: [createdById], references: [id])
+  connector     Connector?     @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+  webinars      Webinar[]      // Webinars that use this dataset for script generation
+
+  @@index([tenantId, status])
+  @@index([connectorId])
+}
+
+model MarketplaceOffering {
+  id           String          @id @default(cuid())
+  tenantId     String
+  createdById  String?         @db.Uuid
+  title        String
+  description  String?         @db.Text
+  price        Decimal?        @db.Decimal(10, 2)
+  currency     String          @default("USD") @db.VarChar(3)
+  category     String?         @db.VarChar(100)
+  status       OfferingStatus  @default(DRAFT)
+  rating       Float?
+  reviews      Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy    User?           @relation("OfferingCreatedBy", fields: [createdById], references: [id])
+
+  @@index([tenantId, status])
+  @@index([category])
+}
+
+model TenantAuditLog {
+  id           String   @id @default(cuid())
+  tenantId     String
+  actorId      String?  @db.Uuid
+  action       String
+  resourceType String
+  resourceId   String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([actorId])
+}
+
+model TenantProvisioningJob {
+  id           String             @id @default(cuid())
+  tenantId     String
+  trigger      ProvisioningTrigger
+  status       ProvisioningStatus @default(PENDING)
+  targetSchema  String?           @db.VarChar(128)
+  metadata     Json?
+  errorDetails Json?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  events       TenantProvisioningEvent[]
+
+  @@index([tenantId, status])
+  @@index([createdAt])
+}
+
+model TenantRuntimeConfig {
+  id             String   @id @default(cuid())
+  tenantId       String   @unique
+  schemaName     String   @db.VarChar(128)
+  databaseHost   String?  @db.VarChar(255)
+  databasePort   Int?
+  connectionUrl  String?  @db.VarChar(512)
+  lastVerifiedAt DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([schemaName])
+}
+
+model TenantProvisioningEvent {
+  id           String             @id @default(cuid())
+  jobId        String
+  tenantId     String
+  action       String
+  status       ProvisioningStatus
+  payload      Json?
+  createdAt    DateTime           @default(now())
+  job          TenantProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([jobId])
+}
+
+model BreakoutRoom {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webinarId       String               @db.Uuid
+  name            String               @db.VarChar(255)
+  description     String?              @db.Text
+  status          BreakoutRoomStatus   @default(ACTIVE)
+  maxParticipants Int                  @default(10)
+  streamCallId    String?              @db.VarChar(255) // Stream.io call ID
+  callTimeLimit   Int                  @default(180) // Duration in seconds (3 minutes default)
+  enableRecording Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  webinar         Webinar              @relation(fields: [webinarId], references: [id], onDelete: Cascade)
+  participants    BreakoutRoomParticipant[]
+
+  @@index([webinarId])
+  @@index([status])
+}
+
+model BreakoutRoomParticipant {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  breakoutRoomId String       @db.Uuid
+  attendeeId     String       @db.Uuid
+  joinedAt       DateTime     @default(now())
+  leftAt         DateTime?
+  isModerator    Boolean      @default(false)
+  breakoutRoom   BreakoutRoom @relation(fields: [breakoutRoomId], references: [id], onDelete: Cascade)
+
+  @@unique([breakoutRoomId, attendeeId])
+  @@index([breakoutRoomId])
+  @@index([attendeeId])
+}
+
+model Connector {
+  id            String         @id @default(cuid())
+  tenantId      String
+  createdById   String?        @db.Uuid
+  name          String
+  type          ConnectorType
+  status        ConnectorStatus @default(INACTIVE)
+  config        Json           // Encrypted connector-specific configuration
+  credentials   Json?           // Encrypted OAuth tokens, API keys, etc.
+  lastSyncAt    DateTime?
+  lastSyncStatus SyncStatus?
+  lastSyncError String?        @db.Text
+  syncInterval  Int            @default(3600) // Sync interval in seconds (default 1 hour)
+  autoSync      Boolean         @default(true)
+  metadata      Json?           // Additional connector metadata
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("ConnectorCreatedBy", fields: [createdById], references: [id])
+  datasets      Dataset[]       // Datasets created from this connector
+  syncHistory   ConnectorSync[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([status])
+}
+
+model ConnectorSync {
+  id            String         @id @default(cuid())
+  connectorId  String
+  status       SyncStatus      @default(PENDING)
+  startedAt    DateTime        @default(now())
+  completedAt  DateTime?
+  recordsFetched Int           @default(0)
+  recordsProcessed Int         @default(0)
+  errorMessage String?         @db.Text
+  metadata     Json?           // Sync-specific metadata
+  connector    Connector       @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  @@index([connectorId, startedAt])
+  @@index([status])
+}

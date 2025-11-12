@@ -1,0 +1,116 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: spotlight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: saas_operator
+      POSTGRES_PASSWORD: change_me_at_runtime
+      POSTGRES_DB: spotlight_multi_tenant
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5434:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U saas_operator']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - core
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: spotlight-redis
+    command: ['redis-server', '--save', '60', '1', '--loglevel', 'warning']
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - core
+
+  minio:
+    image: minio/minio:latest
+    container_name: spotlight-minio
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: spotlight
+      MINIO_ROOT_PASSWORD: change_me_during_provisioning
+    volumes:
+      - minio_data:/data
+    ports:
+      - '9100:9000'
+      - '9101:9001'
+    restart: unless-stopped
+    networks:
+      - core
+
+  api_gateway:
+    build:
+      context: ./api-gateway
+    container_name: spotlight-api-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://saas_operator:change_me_at_runtime@postgres:5432/spotlight_multi_tenant
+    ports:
+      - '8080:4000'
+    restart: unless-stopped
+    networks:
+      - core
+      - edge
+
+  temporal:
+    image: temporalio/auto-setup:1.23.0
+    container_name: spotlight-temporal
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      DB_USER: saas_operator
+      DB_PWD: change_me_at_runtime
+      DB_NAME: temporal
+      DB_HOST: postgres
+      DB_MAX_CONNS: 20
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '7233:7233'
+    restart: unless-stopped
+    networks:
+      - core
+
+  telemetry:
+    image: grafana/otel-lgtm:0.7.1
+    container_name: spotlight-telemetry
+    restart: unless-stopped
+    ports:
+      - '3010:3000'
+      - '4417:4317'
+      - '4418:4318'
+    networks:
+      - core
+      - observability
+
+networks:
+  core:
+    name: spotlight-core
+  edge:
+    name: spotlight-edge
+  observability:
+    name: spotlight-observability
+
+volumes:
+  postgres_data:
+    name: spotlight-postgres-data
+  minio_data:
+    name: spotlight-minio-data
+
