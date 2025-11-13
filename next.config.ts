@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
     // Temporarily ignore type errors during build to verify middleware fix
     ignoreBuildErrors: true,
   },
+  // Ensure proper routing in standalone mode
+  experimental: {
+    outputFileTracingIncludes: {
+      '/api/**/*': ['./src/app/api/**/*'],
+    },
+  },
 };
 
 export default nextConfig;
