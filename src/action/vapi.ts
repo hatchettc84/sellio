@@ -1,11 +1,12 @@
 "use server";
 
 import { aiAgentPrompt } from "@/lib/data";
-import { vapiServer } from "@/lib/vapi/vapiServer";
+import { getVapiServer } from "@/lib/vapi/vapiServer";
 import { runTenantOperation } from "@/lib/tenant/auth";
 
 export const createAssistant = async (name: string, userId: string) => {
   try {
+    const vapiServer = getVapiServer();
     const createdAssistant = await vapiServer.assistants.create({
       name: name,
       firstMessage: `Hi there, this is ${name} from customer support. How can I help you today?`,
@@ -64,6 +65,7 @@ export const updateAssistant = async (
   systemPrompt: string
 ) => {
   try {
+    const vapiServer = getVapiServer();
     const updatedAssistant = await vapiServer.assistants.update(assistantId, {
       firstMessage: firstMessage,
       model: {
@@ -134,6 +136,7 @@ export const updateAssistantForWebinar = async (
 ) => {
   try {
     // Update Vapi assistant
+    const vapiServer = getVapiServer();
     const updatedAssistant = await vapiServer.assistants.update(assistantId, {
       firstMessage: firstMessage,
       model: {
