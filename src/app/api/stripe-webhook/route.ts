@@ -2,7 +2,7 @@
 
 import { changeAttendanceType } from "@/action/attendance";
 import { updateSubscription } from "@/action/stripe";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
@@ -49,7 +49,8 @@ export async function POST(req: NextRequest) {
 
     switch (stripeEvent.type) {
       case "checkout.session.completed":
-      await changeAttendanceType(event?.metadata?.attendeeId, event?.metadata?.webinarId, "CONVERTED"); 
+        await changeAttendanceType(event?.metadata?.attendeeId, event?.metadata?.webinarId, "CONVERTED");
+        break;
       case "customer.subscription.created":
       case "customer.subscription.updated":
         await updateSubscription(event);
@@ -79,5 +80,6 @@ const getStripeEvent = async (
     throw new Error("Stripe signature or webhook secret missing");
   }
 
+  const stripe = getStripe();
   return stripe.webhooks.constructEvent(body, sig, webhookSecret);
 };

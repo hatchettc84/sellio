@@ -1,6 +1,6 @@
 "use server";
 
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { onAuthenticateUser } from "./auth";
 import Stripe from "stripe";
 import { prismaClient } from "@/lib/prismaClient";
@@ -28,6 +28,7 @@ export const getAllProductsFromStripe = async () => {
       };
     }
 
+    const stripe = getStripe();
     const products = await stripe.products.list(
       {},
       {
@@ -53,6 +54,7 @@ export const getAllProductsFromStripe = async () => {
 //create checkout link
 export const createCheckoutLink = async (priceId: string, stripeId: string, attendeeId:string, webinarId:string, bookCall:boolean=false) => {
   try {
+    const stripe = getStripe();
     const session = await stripe.checkout.sessions.create(
       {
         line_items: [
@@ -100,6 +102,7 @@ export const onGetStripeClientSecret = async (
   userId: string
 ) => {
   try {
+    const stripe = getStripe();
     // 1. Check if the customer already exists
     let customer: Stripe.Customer;
     const existingCustomers = await stripe.customers.list({ email: email });
@@ -134,8 +137,6 @@ export const onGetStripeClientSecret = async (
       },
     });
 
-    
-    // console.log("Subscription created----->", subscription);
     const paymentIntent = (subscription.latest_invoice as Stripe.Invoice)
     .payment_intent as Stripe.PaymentIntent;
     
@@ -159,7 +160,7 @@ export const updateSubscription = async (subscription: Stripe.Subscription) => {
     await prismaClient.user.update({
       where: { id: userId },
       data: {
-        subscription: subscription.status === "active" ? true: false,
+        subscription: subscription.status === "active",
       },
     });
   } catch (error) {

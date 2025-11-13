@@ -54,8 +54,8 @@ USER nextjs
 
 EXPOSE 3000
 
-# Use PORT from environment if set, otherwise default to 3000
-ENV PORT=${PORT:-3000}
+# PORT will be set by Coolify at runtime, default to 3000 for local development
+ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
 CMD ["node", "server.js"]

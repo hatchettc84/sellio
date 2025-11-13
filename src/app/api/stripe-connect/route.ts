@@ -1,5 +1,5 @@
 import { prismaClient } from '@/lib/prismaClient';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripe';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     
     try {
       // Exchange the authorization code for an access token
+      const stripe = getStripe();
       const response = await stripe.oauth.token({
         grant_type: "authorization_code",
         code,

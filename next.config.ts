@@ -11,10 +11,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   // Ensure proper routing in standalone mode
-  experimental: {
-    outputFileTracingIncludes: {
-      '/api/**/*': ['./src/app/api/**/*'],
-    },
+  outputFileTracingIncludes: {
+    '/api/**/*': ['./src/app/api/**/*'],
   },
 };
 

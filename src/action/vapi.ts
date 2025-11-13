@@ -25,12 +25,9 @@ export const createAssistant = async (name: string, userId: string) => {
 
     console.log("Assistant created:", createdAssistant);
 
-    return await runTenantOperation(async (prisma, context) => {
-      // Check if tenant exists before setting tenantId
-      const tenantExists = context.tenantId
-        ? await prisma.tenant.findUnique({ where: { id: context.tenantId } })
-        : null;
-
+    return await runTenantOperation(async (prisma) => {
+      // Note: Tenant provisioning is not yet implemented, so we set tenantId to null
+      // TODO: Implement automatic tenant provisioning on user signup
       const aiAgent = await prisma.aiAgents.create({
         data: {
           id: (createdAssistant as unknown as { id: string }).id,
@@ -40,7 +37,7 @@ export const createAssistant = async (name: string, userId: string) => {
           name: name,
           firstMessage: `Hi there, this is ${name} from customer support. How can I help you today?`,
           userId: userId,
-          tenantId: tenantExists ? context.tenantId : null,
+          tenantId: null, // Tenant support not yet enabled
         },
       });
 
