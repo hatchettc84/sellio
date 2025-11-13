@@ -36,17 +36,18 @@ FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy public assets
+# Copy public assets - must be in root for Next.js to find them
 COPY --from=builder /app/public ./public
 
-# Copy standalone build (includes server.js and all dependencies)
+# Copy standalone build
+# The standalone folder structure is: .next/standalone/{server.js, package.json, node_modules, .next}
+# We need to copy the contents, not the folder itself
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-
-# Copy static files
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
@@ -56,6 +57,5 @@ EXPOSE 3000
 # Use PORT from environment if set, otherwise default to 3000
 ENV PORT=${PORT:-3000}
 ENV HOSTNAME="0.0.0.0"
-ENV NEXT_TELEMETRY_DISABLED=1
 
 CMD ["node", "server.js"]
